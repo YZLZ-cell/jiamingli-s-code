@@ -1,0 +1,144 @@
+clear;
+clc;
+
+%%Parameter setup
+w = 2;
+r = 1.2;
+d = linspace(-20, 20, 40);
+T = 0.35;
+p = linspace(pi, 2*pi, 6);
+t1 = 1;
+t2 = linspace(1, 7, 20);
+r1 = 0.7;
+
+
+exp_term = exp(-t1/T);
+exp_t1_over_T = exp(t1/T); 
+y_val1 = r*(exp_term - exp_t1_over_T)/(exp_term + exp_t1_over_T);
+y_val2 = -r*(exp_term - exp_t1_over_T)/(exp_term + exp_t1_over_T);
+
+
+average_population_transfers = zeros(length(t2), length(d), length(p));
+ave = zeros(length(t2), length(d));
+
+for i = 1:length(t2)
+    t2_val = t2(i);
+    N = round(1000 * (t2_val + 2*t1));
+    for j = 1:length(d)
+        d_val = d(j);
+        d0 = (r1 * t2_val)/T - r*2*(exp_term - exp_t1_over_T)/(exp_term + exp_t1_over_T);
+        for k = 1:length(p)
+            p_val = p(k);
+            average_population_transfers(i, j, k) = eve2(N, T, t1, t2_val, r, r1, w, d_val, d0, p_val);
+        end
+        ave(i, j) = mean(average_population_transfers(i, j, :));
+    end
+end
+
+
+figure;
+hold on; 
+
+
+contourf(t2+2*t1, d,  ave',  ...
+    'LevelList', linspace(0, 1, 11), 'LineColor', 'none');
+
+
+hline1 = yline(y_val1, 'k--', 'LineWidth', 1.5);
+hline2 = yline(y_val2, 'k--', 'LineWidth', 1.5);
+
+% Set label
+ax = gca;
+ax.XLabel.String = '$\tau (\mu s)$';
+ax.XLabel.Interpreter = 'latex';
+ax.XLabel.FontSize = 25;
+ax.XLabel.Position(2) = ax.XLabel.Position(2)+3.5 ; 
+
+
+ax.YLabel.String = '$\delta$ (MHz)'; 
+ax.YLabel.Interpreter = 'latex';
+ax.YLabel.FontSize = 25;
+ax.YLabel.Position(1) = ax.YLabel.Position(1)+0.3; 
+
+
+cb = colorbar;
+caxis([0 1]);
+cb.Ticks = 0:0.5:1;
+cb.Label.FontSize = 25;
+
+
+ax.XTick = linspace(3, 9, 2); 
+ax.YTick = linspace(-20, 20, 3); % d ∈ [-10,10]
+ax.TickLabelInterpreter = 'latex';
+ax.FontSize = 25;
+
+drawnow;
+
+%%
+function out = sig_0()
+    out = diag([1, 1]);
+end
+
+function out = sig_z()
+    out = diag([1, -1]) / 2;
+end
+
+function out = sig_x()
+    out = [0, 1; 1, 0] / 2;
+end
+
+function out = sig_up()
+    out = [0, 1; 0, 0] / 2;
+end
+
+function out = sig_down()
+    out = [0, 0; 1, 0] / 2;
+end
+
+function out = com(a, b)
+    out = a * b - b * a;
+end
+
+
+function h2 = ham2(t, T, t1, t2, r, r1, w, d, d0, p)
+
+    a = r * T * log(1 / (exp((t - t1) / T) + exp(-(t - t1) / T))) + r1 / T * t2 / 2 * t - ...
+        r * T * log(1 / (exp((0 - t1) / T) + exp(-(0 - t1) / T)));
+    b = r * T * log(1 / (exp((t - t1 - t2) / T) + exp(-(t - t1 - t2) / T))) - ...
+        r1 / T * t2 / 2 * (t - t2 - t1);
+    c = -r1 / T * (t - t1 - t2 / 2)^2 / 2 + r1 / T * (-t2 / 2)^2 / 2;
+    e = r * T * log(1 / (exp((t1 - t1) / T) + exp(-(t1 - t1) / T))) + ...
+        r1 / T * t2 / 2 * t1 - r * T * log(1 / (exp((0 - t1) / T) + exp(-(0 - t1) / T)));
+
+    if t < t1
+        x = 2 * w / (exp((t - t1) / T) + exp(-(t - t1) / T)) * (exp(-1i * a + 1i * d0 / 2 * t+1i*p) + 0.95*exp(1i * a - 1i * d0 / 2 * t));
+        y = 2 * w / (exp((t - t1) / T) + exp(-(t - t1) / T)) * (exp(1i * a - 1i * d0 / 2 * t-1i*p) + 0.95*exp(-1i * a + 1i * d0 / 2 * t));
+        z = d;
+    elseif t1 <= t && t < t1 + t2
+        x = w * (exp(-1i * (c + e) + 1i * d0 / 2 * t+1i*p) + 0.95*exp(1i * (c + e) - 1i * d0 / 2 * t));
+        y = w * (exp(1i * (c + e) - 1i * d0 / 2 * t-1i*p) + 0.95*exp(-1i * (c + e) + 1i * d0 / 2 * t));
+        z = d;
+    else
+        x = 2 * w / (exp((t - t1 - t2) / T) + exp(-(t - t1 - t2) / T)) * (exp(-1i * (b + e) + 1i * d0 / 2 * t+1i*p) + 0.95*exp(1i * (b + e) - 1i * d0 / 2 * t));
+        y = 2 * w / (exp((t - t1 - t2) / T) + exp(-(t - t1 - t2) / T)) * (exp(1i * (b + e) - 1i * d0 / 2 * t-1i*p) + 0.95*exp(-1i * (b + e) + 1i * d0 / 2 * t));
+        z = d;
+    end
+
+    h2 = x * sig_up() + y * sig_down() + z * sig_z();
+end
+
+
+function result2 = eve2(N, T, t1, t2, r, r1, w, d, d0, p)
+    rho0 = sig_z() + sig_0() / 2;
+    rho = rho0;
+    result_arr2 = zeros(N, 1);
+
+    for i = 1:N
+        dt = 0.001;
+        h2 = ham2(i * dt, T, t1, t2, r, r1, w, d, d0, p);
+        rho = rho - 1i * com(h2, rho) * dt - 0.5 * com(h2, com(h2, rho)) * (dt^2);
+        result_arr2(i) = real(rho(2, 2));
+    end
+
+    result2 = result_arr2(end);
+end
